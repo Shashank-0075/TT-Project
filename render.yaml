@@ -5,12 +5,11 @@ services:
   # -------------------------------------------------------------
   - type: web
     name: campusfix-backend
-    runtime: java
+    runtime: docker
     region: ohio
     plan: free
     rootDir: backend
-    buildCommand: chmod +x mvnw && ./mvnw clean package -DskipTests
-    startCommand: java -jar target/campusfix-backend-1.0.0.jar
+    dockerfilePath: Dockerfile
     envVars:
       - key: SPRING_DATASOURCE_URL
         value: jdbc:mysql://gateway01.us-east-1.prod.aws.tidbcloud.com:4000/campusfix?sslMode=VERIFY_IDENTITY
