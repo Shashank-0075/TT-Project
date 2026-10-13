@@ -75,6 +75,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Cloudinary SDK for persistent image storage on free cloud tiers -->
+        <dependency>
+            <groupId>com.cloudinary</groupId>
+            <artifactId>cloudinary-http44</artifactId>
+            <version>1.39.0</version>
+        </dependency>
+
         <!-- Swagger UI / OpenAPI documentation at /swagger-ui.html -->
         <dependency>
             <groupId>org.springdoc</groupId>

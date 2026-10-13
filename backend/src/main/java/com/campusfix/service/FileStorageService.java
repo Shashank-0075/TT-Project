@@ -2,13 +2,17 @@ package com.campusfix.service;
 
 import com.campusfix.exception.InvalidFileException;
 import com.campusfix.exception.ResourceNotFoundException;
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -18,21 +22,18 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Stores uploaded images on the local disk (folder "uploads/" next to the backend).
- * Only the relative path (e.g. "complaints/6f1c...e2.png") is saved in MySQL.
- *
- * Why not store images inside the database? Big binary data makes the database slow and
- * hard to back up. Files on disk are simple and fast - perfect for a college project.
+ * Stores uploaded images on Cloudinary (if configured via environment variables)
+ * or falls back to local disk storage (folder "uploads/" next to the backend).
  *
  * Security measures:
  *  - only JPEG, PNG, GIF and WEBP are accepted
  *  - the real file content is checked ("magic bytes"), not only the file name
  *  - maximum size 5 MB
- *  - the file is saved under a random UUID name, the user supplied name is never used
- *    (prevents path traversal such as "../../something")
+ *  - files are saved under random UUID names to prevent directory traversal
  */
 @Service
 public class FileStorageService {
@@ -45,11 +46,28 @@ public class FileStorageService {
 
     private final Path root;
     private final long maxFileSizeBytes;
+    private final Cloudinary cloudinary;
 
     public FileStorageService(@Value("${campusfix.upload.dir}") String uploadDir,
-                              @Value("${campusfix.upload.max-file-size-bytes}") long maxFileSizeBytes) {
+                              @Value("${campusfix.upload.max-file-size-bytes}") long maxFileSizeBytes,
+                              @Value("${cloudinary.cloud-name:}") String cloudName,
+                              @Value("${cloudinary.api-key:}") String apiKey,
+                              @Value("${cloudinary.api-secret:}") String apiSecret) {
         this.root = Paths.get(uploadDir).toAbsolutePath().normalize();
         this.maxFileSizeBytes = maxFileSizeBytes;
+
+        if (StringUtils.hasText(cloudName) && StringUtils.hasText(apiKey) && StringUtils.hasText(apiSecret)) {
+            this.cloudinary = new Cloudinary(ObjectUtils.asMap(
+                    "cloud_name", cloudName.trim(),
+                    "api_key", apiKey.trim(),
+                    "api_secret", apiSecret.trim(),
+                    "secure", true
+            ));
+            log.info("Cloudinary storage enabled for cloud deployment (cloud: {})", cloudName);
+        } else {
+            this.cloudinary = null;
+            log.info("Cloudinary not configured. Using local disk storage at: {}", this.root);
+        }
     }
 
     /**
@@ -72,6 +90,25 @@ public class FileStorageService {
 
         String extension = detectExtension(file);
 
+        // 1. If Cloudinary is configured (cloud deployment), upload directly to Cloudinary
+        if (cloudinary != null) {
+            try {
+                String publicId = folder + "/" + UUID.randomUUID();
+                Map<?, ?> uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
+                        "public_id", publicId,
+                        "resource_type", "image",
+                        "folder", "campusfix"
+                ));
+                String secureUrl = (String) uploadResult.get("secure_url");
+                log.info("Image uploaded successfully to Cloudinary: {}", secureUrl);
+                return secureUrl;
+            } catch (IOException ex) {
+                log.error("Cloudinary upload failed", ex);
+                throw new InvalidFileException("Could not upload image to cloud storage. Please try again.");
+            }
+        }
+
+        // 2. Otherwise fall back to local disk storage
         String fileName = UUID.randomUUID() + "." + extension;
         Path targetDirectory = root.resolve(folder);
         Path target = targetDirectory.resolve(fileName).normalize();
@@ -130,8 +167,17 @@ public class FileStorageService {
         return detected;
     }
 
-    /** Loads a stored file. The path is checked so that nobody can read files outside "uploads/". */
+    /** Loads a stored file. If Cloudinary URL, proxies it, otherwise serves from local disk. */
     public Resource load(String relativePath) {
+        if (relativePath != null && (relativePath.startsWith("http://") || relativePath.startsWith("https://"))) {
+            try {
+                return new UrlResource(URI.create(relativePath));
+            } catch (Exception ex) {
+                log.error("Failed to load remote image from {}", relativePath, ex);
+                throw new ResourceNotFoundException("Remote image could not be loaded");
+            }
+        }
+
         try {
             Path file = root.resolve(relativePath).normalize();
             if (!file.startsWith(root) || !Files.isRegularFile(file)) {
@@ -147,6 +193,9 @@ public class FileStorageService {
     public void deleteQuietly(String relativePath) {
         if (relativePath == null) {
             return;
+        }
+        if (relativePath.startsWith("http://") || relativePath.startsWith("https://")) {
+            return; // Remote cloud URLs cleanup can be managed via cloud retention or console
         }
         try {
             Path file = root.resolve(relativePath).normalize();

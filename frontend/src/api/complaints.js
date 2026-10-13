@@ -35,6 +35,9 @@ export const complaintApi = {
 
   getFileUrl: (path) => {
     if (!path) return null;
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
     const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
     return `${base}/files/${path}`;
   },
@@ -42,6 +45,9 @@ export const complaintApi = {
   // Helper to fetch protected image blobs with auth headers
   fetchImageBlobUrl: async (relativePath) => {
     if (!relativePath) return null;
+    if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) {
+      return relativePath;
+    }
     try {
       const res = await api.get(`/files/${relativePath}`, { responseType: 'blob' });
       return URL.createObjectURL(res.data);
