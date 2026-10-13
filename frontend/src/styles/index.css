@@ -80,6 +80,15 @@
 
   --sidebar-width: 268px;
   --header-height: 68px;
+
+  /* Aliases & Fallbacks for Component Compatibility */
+  --border-color: var(--slate-200);
+  --primary-color: var(--primary-600);
+  --primary-light: var(--primary-50);
+  --danger-color: var(--danger-dot);
+  --info-light: var(--info-bg);
+  --warning-light: var(--warning-bg);
+  --success-light: var(--success-bg);
 }
 
 /* ================= Reset & Base ================= */

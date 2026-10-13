@@ -15,8 +15,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$tempDir = Join-Path $env:TEMP 'campusfix-pack'; " ^
   "if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }; " ^
   "New-Item -ItemType Directory -Path $tempDir | Out-Null; " ^
-  "robocopy \"$sourceDir\backend\" \"$tempDir\backend\" /E /XD target .idea .settings .sts4-cache /XF *.log | Out-Null; " ^
-  "robocopy \"$sourceDir\frontend\" \"$tempDir\frontend\" /E /XD node_modules dist .idea | Out-Null; " ^
+  "robocopy \"$sourceDir\backend\" \"$tempDir\backend\" /E /XD target .idea .settings .sts4-cache uploads /XF *.log .env | Out-Null; " ^
+  "robocopy \"$sourceDir\frontend\" \"$tempDir\frontend\" /E /XD node_modules dist .idea /XF *.log .env | Out-Null; " ^
   "robocopy \"$sourceDir\database\" \"$tempDir\database\" /E | Out-Null; " ^
   "robocopy \"$sourceDir\docs\" \"$tempDir\docs\" /E | Out-Null; " ^
   "Get-ChildItem -Path $sourceDir -File -Depth 0 | ForEach-Object { if ($_.Name -notmatch '\.zip$') { Copy-Item $_.FullName -Destination $tempDir } }; " ^

@@ -46,7 +46,13 @@ export const SubmitComplaintPage = () => {
 
       let chosenCategory = cats.length > 0 ? cats[0].id : '';
       if (initialCategoryParam) {
-        const found = cats.find((c) => String(c.id) === String(initialCategoryParam));
+        const queryParamLower = initialCategoryParam.toLowerCase().trim();
+        const found = cats.find(
+          (c) =>
+            String(c.id) === initialCategoryParam ||
+            c.name.toLowerCase().includes(queryParamLower) ||
+            queryParamLower.includes(c.name.toLowerCase())
+        );
         if (found) chosenCategory = found.id;
       }
 

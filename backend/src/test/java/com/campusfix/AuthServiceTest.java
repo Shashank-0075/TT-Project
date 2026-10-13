@@ -54,7 +54,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void testRegisterSuccess() {
+    void testRegisterSuccessDefaultRoleStudent() {
         RegisterRequest req = new RegisterRequest(
                 "Test Student",
                 "teststudent@campusfix.edu",
@@ -66,9 +66,72 @@ class AuthServiceTest {
         UserResponse response = authService.register(req);
         assertNotNull(response);
         assertEquals("teststudent@campusfix.edu", response.email());
-        assertEquals("STUDENT_STAFF", response.role());
+        assertEquals("STUDENT", response.role());
         assertTrue(response.active());
         assertTrue(userRepository.existsByEmailIgnoreCase("teststudent@campusfix.edu"));
+    }
+
+    @Test
+    void testRegisterSuccessWithStaffRole() {
+        RegisterRequest req = new RegisterRequest(
+                "Prof Sharma",
+                "sharma@campusfix.edu",
+                "Pass12345",
+                "9876543210",
+                "Computer Science",
+                RoleName.STAFF
+        );
+
+        UserResponse response = authService.register(req);
+        assertNotNull(response);
+        assertEquals("sharma@campusfix.edu", response.email());
+        assertEquals("STAFF", response.role());
+        assertTrue(response.active());
+    }
+
+    @Test
+    void testRegisterForbiddenRoleAdminThrowsBadRequest() {
+        RegisterRequest req = new RegisterRequest(
+                "Hacker Admin",
+                "hacker@campusfix.edu",
+                "Pass12345",
+                "9876543210",
+                "IT",
+                RoleName.ADMIN
+        );
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> authService.register(req));
+        assertTrue(ex.getMessage().contains("only permitted for STUDENT or STAFF"));
+    }
+
+    @Test
+    void testRegisterForbiddenRoleMaintenanceThrowsBadRequest() {
+        RegisterRequest req = new RegisterRequest(
+                "Hacker Maint",
+                "hackermaint@campusfix.edu",
+                "Pass12345",
+                "9876543210",
+                "Maintenance",
+                RoleName.MAINTENANCE
+        );
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> authService.register(req));
+        assertTrue(ex.getMessage().contains("only permitted for STUDENT or STAFF"));
+    }
+
+    @Test
+    void testRegisterForbiddenRoleStudentStaffThrowsBadRequest() {
+        RegisterRequest req = new RegisterRequest(
+                "Legacy Role User",
+                "legacy@campusfix.edu",
+                "Pass12345",
+                "9876543210",
+                "CSE",
+                RoleName.STUDENT_STAFF
+        );
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> authService.register(req));
+        assertTrue(ex.getMessage().contains("only permitted for STUDENT or STAFF"));
     }
 
     @Test

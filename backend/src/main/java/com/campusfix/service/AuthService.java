@@ -7,6 +7,7 @@ import com.campusfix.dto.UserResponse;
 import com.campusfix.entity.Role;
 import com.campusfix.entity.RoleName;
 import com.campusfix.entity.User;
+import com.campusfix.exception.BadRequestException;
 import com.campusfix.exception.ConflictException;
 import com.campusfix.repository.RoleRepository;
 import com.campusfix.repository.UserRepository;
@@ -48,9 +49,13 @@ public class AuthService {
         }
 
         RoleName targetRole = request.role() != null ? request.role() : RoleName.STUDENT;
+        if (targetRole != RoleName.STUDENT && targetRole != RoleName.STAFF) {
+            throw new BadRequestException("Public registration is only permitted for STUDENT or STAFF roles");
+        }
+
         Role role = roleRepository.findByName(targetRole)
                 .or(() -> roleRepository.findByName(RoleName.STUDENT_STAFF))
-                .orElseThrow(() -> new IllegalStateException("Role is missing in the database"));
+                .orElseThrow(() -> new IllegalStateException("Role is missing in the database: " + targetRole));
 
         User user = new User();
         user.setFullName(request.fullName().trim());

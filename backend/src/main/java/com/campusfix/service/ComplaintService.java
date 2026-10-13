@@ -184,10 +184,14 @@ public class ComplaintService {
                 .orElseThrow(() -> new ResourceNotFoundException("Complaint", id));
     }
 
-    /** Students/staff may only see their own complaints. Admin and maintenance see all. */
+    /** Students and staff may only view their own complaints. Admin and maintenance can view all. */
     public void assertCanView(Complaint complaint, UserPrincipal principal) {
-        boolean isStudentOrStaff = RoleName.STUDENT_STAFF.name().equals(principal.getRoleName());
-        if (isStudentOrStaff && !complaint.getSubmittedBy().getId().equals(principal.getId())) {
+        String role = principal.getRoleName();
+        boolean isRestrictedUser = RoleName.STUDENT.name().equals(role)
+                || RoleName.STAFF.name().equals(role)
+                || RoleName.STUDENT_STAFF.name().equals(role);
+
+        if (isRestrictedUser && !complaint.getSubmittedBy().getId().equals(principal.getId())) {
             throw new AccessDeniedException("You can only view your own complaints");
         }
     }
