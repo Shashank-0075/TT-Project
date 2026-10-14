@@ -2,10 +2,9 @@ package com.campusfix.service;
 
 import com.campusfix.exception.InvalidFileException;
 import com.campusfix.exception.ResourceNotFoundException;
-import com.cloudinary.Cloudinary;
-import com.cloudinary.utils.ObjectUtils;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,7 +45,7 @@ public class FileStorageService {
 
     private final Path root;
     private final long maxFileSizeBytes;
-    private final Cloudinary cloudinary;
+    private final Object cloudinaryClient;
 
     public FileStorageService(@Value("${campusfix.upload.dir}") String uploadDir,
                               @Value("${campusfix.upload.max-file-size-bytes}") long maxFileSizeBytes,
@@ -56,18 +55,25 @@ public class FileStorageService {
         this.root = Paths.get(uploadDir).toAbsolutePath().normalize();
         this.maxFileSizeBytes = maxFileSizeBytes;
 
+        Object client = null;
         if (StringUtils.hasText(cloudName) && StringUtils.hasText(apiKey) && StringUtils.hasText(apiSecret)) {
-            this.cloudinary = new Cloudinary(ObjectUtils.asMap(
-                    "cloud_name", cloudName.trim(),
-                    "api_key", apiKey.trim(),
-                    "api_secret", apiSecret.trim(),
-                    "secure", true
-            ));
-            log.info("Cloudinary storage enabled for cloud deployment (cloud: {})", cloudName);
+            try {
+                Class<?> clazz = Class.forName("com.cloudinary.Cloudinary");
+                Map<String, Object> config = Map.of(
+                        "cloud_name", cloudName.trim(),
+                        "api_key", apiKey.trim(),
+                        "api_secret", apiSecret.trim(),
+                        "secure", true
+                );
+                client = clazz.getConstructor(Map.class).newInstance(config);
+                log.info("Cloudinary storage enabled for cloud deployment (cloud: {})", cloudName);
+            } catch (Throwable t) {
+                log.warn("Cloudinary classes not available on classpath. Using local storage: {}", t.getMessage());
+            }
         } else {
-            this.cloudinary = null;
             log.info("Cloudinary not configured. Using local disk storage at: {}", this.root);
         }
+        this.cloudinaryClient = client;
     }
 
     /**
@@ -91,18 +97,21 @@ public class FileStorageService {
         String extension = detectExtension(file);
 
         // 1. If Cloudinary is configured (cloud deployment), upload directly to Cloudinary
-        if (cloudinary != null) {
+        if (cloudinaryClient != null) {
             try {
                 String publicId = folder + "/" + UUID.randomUUID();
-                Map<?, ?> uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
+                Object uploader = cloudinaryClient.getClass().getMethod("uploader").invoke(cloudinaryClient);
+                Method uploadMethod = uploader.getClass().getMethod("upload", Object.class, Map.class);
+                Map<String, Object> params = Map.of(
                         "public_id", publicId,
                         "resource_type", "image",
                         "folder", "campusfix"
-                ));
+                );
+                Map<?, ?> uploadResult = (Map<?, ?>) uploadMethod.invoke(uploader, file.getBytes(), params);
                 String secureUrl = (String) uploadResult.get("secure_url");
                 log.info("Image uploaded successfully to Cloudinary: {}", secureUrl);
                 return secureUrl;
-            } catch (IOException ex) {
+            } catch (Exception ex) {
                 log.error("Cloudinary upload failed", ex);
                 throw new InvalidFileException("Could not upload image to cloud storage. Please try again.");
             }
